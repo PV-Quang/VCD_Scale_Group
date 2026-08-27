@@ -127,6 +127,86 @@ Việc chỉnh trực tiếp VM đang chạy **không tự cập nhật Template
 
 ---
 
+## Lưu ý!!! Chuẩn bị cấu hình DNS trong Template khi dùng ALB (chuẩn bị trước khi tạo template)
+
+Khi Scale Group được tạo với tùy chọn:
+
+```text
+I have set-up a Load Balancer
+```
+
+VCD có thể tự động tạo một backend Organization VDC Network riêng cho Scale Group dựa trên `Network CIDR` đã khai báo.
+
+Trong môi trường PoC của tài liệu này, backend network do VCD sinh ra có:
+
+- Gateway CIDR;
+- Static IP Pool tương ứng với capacity của Scale Group;
+- nhưng **không có Primary DNS/Secondary DNS được cấu hình**.
+
+Nếu VM Template không có sẵn cấu hình DNS, VM mới được clone từ Template vẫn có thể nhận đúng IP Address và Default Gateway qua VMware Guest Customization nhưng không có DNS resolver để phân giải hostname/domain.
+
+
+### Cách xử lý
+
+Trước khi shutdown VM nguồn và chuyển thành Template, tạo một file Netplan riêng chỉ chứa cấu hình `nameservers`.
+
+> **Không cấu hình IP Address, Prefix hoặc Default Gateway cố định trong file này.** Các thông tin IP/Gateway của từng VM phải để VCD/VMware Guest Customization cấp động.
+
+Ví dụ:
+
+```bash
+sudo vi /etc/netplan/dns.yaml
+```
+
+Nội dung:
+
+```yaml
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    ens192:
+      nameservers:
+        addresses:
+          - 8.8.8.8
+          - 1.1.1.1
+```
+
+![Cấu hình nameserver trong dns.yaml trước khi tạo Template](images/image30.png)
+
+Kiểm tra syntax:
+
+```bash
+sudo netplan generate
+```
+
+Có thể kiểm tra cấu hình Netplan sau khi merge bằng:
+
+```bash
+sudo netplan get
+```
+
+### Cơ chế hoạt động khi VM mới được tạo
+
+Sau khi Scale Group clone VM từ Template:
+
+1. File `dns.yaml` có sẵn trong Template cung cấp thông tin DNS.
+2. VMware Guest Customization sinh file Netplan khác để cấu hình IP Address, Prefix và Default Gateway của VM mới.
+3. Netplan đọc các file `.yaml` trong `/etc/netplan/` và merge các thuộc tính của cùng interface.
+4. VM mới nhận IP/Gateway từ VCD và giữ DNS đã chuẩn hóa trong Template.
+
+
+
+Kỳ vọng VM có:
+
+- IP Address đúng từ backend Static IP Pool;
+- Default Gateway đúng theo `Network CIDR`;
+- DNS Server đã cấu hình trong Template;
+- resolve hostname/domain thành công.
+
+
+---
+
 # 4. Mô hình 1 – I have a fully set-up network
 
 Mô hình này sử dụng Organization VDC Network đã tồn tại.
