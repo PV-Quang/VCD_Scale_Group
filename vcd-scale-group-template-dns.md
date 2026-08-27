@@ -119,8 +119,15 @@ Template nên được chuẩn hóa trước khi dùng cho Auto Scale:
 - Shutdown VM sạch.
 - Add to Catalog/Create vApp Template.
 
+![VM Template trong Catalog](images/image3.png)
 
-## 3.1 Chuẩn bị cấu hình DNS trong Template khi dùng ALB
+> **Khuyến nghị:** quản lý Template theo version, ví dụ `nginx-scale-template-v1`, `nginx-scale-template-v2`.
+
+Việc chỉnh trực tiếp VM đang chạy **không tự cập nhật Template**. VM được Grow về sau luôn clone từ Template đang được gán cho Scale Group.
+
+---
+
+## Lưu ý!!! Chuẩn bị cấu hình DNS trong Template khi dùng ALB (chuẩn bị trước khi tạo template)
 
 Khi Scale Group được tạo với tùy chọn:
 
@@ -138,19 +145,6 @@ Trong môi trường PoC của tài liệu này, backend network do VCD sinh ra 
 
 Nếu VM Template không có sẵn cấu hình DNS, VM mới được clone từ Template vẫn có thể nhận đúng IP Address và Default Gateway qua VMware Guest Customization nhưng không có DNS resolver để phân giải hostname/domain.
 
-Ví dụ VM có thể truy cập Internet bằng IP:
-
-```bash
-ping 8.8.8.8
-```
-
-nhưng các thao tác phụ thuộc DNS như sau có thể thất bại:
-
-```bash
-ping google.com
-apt update
-curl https://example.com
-```
 
 ### Cách xử lý
 
@@ -201,38 +195,7 @@ Sau khi Scale Group clone VM từ Template:
 3. Netplan đọc các file `.yaml` trong `/etc/netplan/` và merge các thuộc tính của cùng interface.
 4. VM mới nhận IP/Gateway từ VCD và giữ DNS đã chuẩn hóa trong Template.
 
-Luồng cấu hình:
 
-```text
-Template
-└── /etc/netplan/dns.yaml
-    └── DNS: 8.8.8.8, 1.1.1.1
-                 │
-                 ▼
-         Scale Group clone VM
-                 │
-                 ▼
-VMware Guest Customization
-└── IP Address / Prefix / Gateway
-                 │
-                 ▼
-          Netplan merge
-                 │
-                 ▼
-VM mới
-├── IP/Gateway: do VCD cấp
-└── DNS: lấy từ Template
-```
-
-Sau khi VM được Initial Grow/Grow, kiểm tra:
-
-```bash
-ip -br addr
-ip route
-resolvectl status ens192
-sudo netplan get
-getent hosts google.com
-```
 
 Kỳ vọng VM có:
 
@@ -241,15 +204,6 @@ Kỳ vọng VM có:
 - DNS Server đã cấu hình trong Template;
 - resolve hostname/domain thành công.
 
-> **Lưu ý:** `8.8.8.8` và `1.1.1.1` chỉ là ví dụ. Trong môi trường Enterprise/Cloud Provider nên ưu tiên DNS Resolver nội bộ hoặc DNS Server được thiết kế cho workload.
-
-![VM Template trong Catalog](images/image3.png)
-
-> **Khuyến nghị:** quản lý Template theo version, ví dụ `nginx-scale-template-v1`, `nginx-scale-template-v2`.
-
-Việc chỉnh trực tiếp VM đang chạy **không tự cập nhật Template**. VM được Grow về sau luôn clone từ Template đang được gán cho Scale Group.
-
----
 
 # 4. Mô hình 1 – I have a fully set-up network
 
